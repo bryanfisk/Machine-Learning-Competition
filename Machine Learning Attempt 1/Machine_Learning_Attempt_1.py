@@ -10,6 +10,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import BaggingClassifier
 import re
 
 def ezip(ls1, ls2):
@@ -91,17 +92,50 @@ def test_c(clf, X_sets, y_sets):
 X_trains, y_trains = format_trains(train_input)
 
 
-clf = SGDClassifier(loss = 'log', penalty = 'l2', alpha = 1e-3, random_state = 42, max_iter = 15, tol = 1e-3)
+clfs = [MLPClassifier(), 
+        SGDClassifier(),
+        SVC(),
+        MultinomialNB(),
+        KNeighborsClassifier(),
+        DecisionTreeClassifier()]
+params = [{'max_iter' : [300, 400, 500]}, 
+          {'loss' : ('log', 'modified_huber'), 
+           'penalty' : ('l1', 'l2', 'elasticnet'), 
+           'alpha' : (1e-1, 1e-2, 1e-3, 1e-4, 'optimal'), 
+           max_iter : [5, 10, 15], 
+           tol : 1e-3, 
+           n_jobs : -1},
+          {'C' : [0.25, 0.5, 0.75, 1.0], 
+           'kernel' : ('linear', 'polynomial', 
+                       'rbf', 'sigmoid'), 
+           'degree' : [2, 3, 4, 5], 
+           'gamma' : ('auto', 'scale'), 
+           'probability' : 'True'},
+          {'alpha' : [0.25, 0.5, 0.75, 1.0]},
+          {'n_neighbors' : [5, 10, 15],
+           'weights' : ('uniform', 'distance'),
+           'algorithm' : 'auto',
+           'p' : [1, 2],
+           'n_jobs' : -1},
+          {'criterion' : ('gini', 'entropy'),
+           'max_depth' : [5, 10, 15, 20, None]}]
+#clf = BaggingClassifier(MLPClassifier(**params), max_samples = 0.5, max_features = 0.5)
+for index, X_set, y_set in ezip(X_trains, y_trains):
+    vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
+    X_set_I = vectorizer.fit_transform(X_set[:100], y_set[:100])
+    X_test_set_I = vectorizer.transform(X_tests[index])
+    clf.fit(X_set_I, y_set[:100])
+    print(clf.predict_proba(X_test_set_I))
+
+'''
+clf = BaggingClassifier(MLPClassifier(max_iter = 500), max_samples = 0.5, max_features = 0.5)
 for index, X_set, y_set in ezip(X_trains, y_trains):
     vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
     X_set_I = vectorizer.fit_transform(X_set, y_set)
-    print(len(X_tests))
-    print(len(X_tests[0]))
     X_test_set_I = vectorizer.transform(X_tests[index])
     clf.fit(X_set_I, y_set)
     print(clf.predict_proba(X_test_set_I))
-
-#test_c(clf, X_trains, y_trains)
+'''
 
 '''
 for index, X_train_set, X_test_set in ezip(X_trains, X_tests):
