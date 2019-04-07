@@ -11,6 +11,8 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
+from sklearn.preprocessing import Normalizer
+from sklearn.neighbors import LSHForest
 import re
 
 def ezip(ls1, ls2):
@@ -63,99 +65,90 @@ def format_trains(i):
         y_trains.append(y)
     return X_trains, y_trains
 
-'''
-params_to_try = ['', {'n_neighbors' : [2, 4, 6, 8, 10], }, '', {'C' : [0.5, 2.1, 0.5]}, {'max_depth' : [5, 10, 15]}]
-
-output_arrays = []
-results = []
-#clf = SGDClassifier(loss = 'log', penalty = 'l2', alpha = 1e-3, random_state = 42, max_iter = 15, tol = 1e-3)
-clf = [MultinomialNB(), KNeighborsClassifier(), MLPClassifier(), SVC(), DecisionTreeClassifier()]
-def test_c(clf, X_sets, y_sets):
-    for index, X_set, y_set in ezip(X_sets, y_sets):
-        vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
-        #X_train, X_valid, y_train, y_valid = train_test_split(X_set, y_set)
-        #X_train_tfidf = vectorizer.fit_transform(X_train, y_train)
-        #X_valid_tfidf = vectorizer.transform(X_valid, y_valid)
-        X_set_tfidf = vectorizer.fit_transform(X_set)
-        y_set_tfidf = vectorizer.transform(y_set)
-        for c in clf:
-            print(clf[1], params_to_try[1])
-            grid = GridSearchCV(clf[2], params_to_try[2], cv = 5)
-            print(getnnz(X_set_tfidf), getnnz(y_set_tfidf))
-            clf[0].fit(X_set_tfidf, y_set_tfidf)
-            #grid.fit(X_set_tfidf, y_set_tfidf)
-            #params = grid.best_params_
-            pred = c.set_params(**params).fit(X_set, y_set).predict(X_tests)
-            output_arrays.append(pred)
-'''
+def array_average_in_place(lst):
+    result = []
+    for row in range(len(lst[0])):
+        temp = []
+        sum = 0
+        for array in lst:
+            #sum += array.item(row, 0)
+            temp.append(array.item(row, 0))
+        result.append(temp)
+        #result.append(sum/len(lst))
+    print(len(result))
+    return result
 
 X_trains, y_trains = format_trains(train_input)
 
+clf_names = [#'Multi-layer perceptron', 
+             'Schochastic gradient descent', 
+             #'Source vector machine', 
+             'Multinomial naive Bayes', 
+             'K-nearest neighbors', 
+             'Decision tree']
 
-clfs = [MLPClassifier(), 
-        SGDClassifier(),
-        SVC(),
+clfs = [#MLPClassifier(warm_start = True, early_stopping = True), 
+        SGDClassifier(tol = 1e-3, n_jobs = 16),
+        #SVC(probability = True),
         MultinomialNB(),
-        KNeighborsClassifier(),
+        KNeighborsClassifier(algorithm = 'auto', n_jobs = 16),
         DecisionTreeClassifier()]
-params = [{'max_iter' : [300, 400, 500]}, 
+
+params = [#{'max_iter' : [500, 750, 1000]}, 
           {'loss' : ('log', 'modified_huber'), 
            'penalty' : ('l1', 'l2', 'elasticnet'), 
-           'alpha' : (1e-1, 1e-2, 1e-3, 1e-4, 'optimal'), 
-           max_iter : [5, 10, 15], 
-           tol : 1e-3, 
-           n_jobs : -1},
-          {'C' : [0.25, 0.5, 0.75, 1.0], 
-           'kernel' : ('linear', 'polynomial', 
-                       'rbf', 'sigmoid'), 
-           'degree' : [2, 3, 4, 5], 
-           'gamma' : ('auto', 'scale'), 
-           'probability' : 'True'},
+           'alpha' : [1e-1, 1e-2, 1e-3, 1e-4]},
+          #{'C' : [1, 10, 100, 1000], 
+           #'kernel' : ('linear', 'poly', 'rbf', 'sigmoid'), 
+           #'degree' : [2, 3, 4, 5], 
+           #'gamma' : ('auto', 'scale')},
           {'alpha' : [0.25, 0.5, 0.75, 1.0]},
-          {'n_neighbors' : [5, 10, 15],
-           'weights' : ('uniform', 'distance'),
-           'algorithm' : 'auto',
-           'p' : [1, 2],
-           'n_jobs' : -1},
+          {'n_neighbors' : [5, 10, 15]},
           {'criterion' : ('gini', 'entropy'),
            'max_depth' : [5, 10, 15, 20, None]}]
-#clf = BaggingClassifier(MLPClassifier(**params), max_samples = 0.5, max_features = 0.5)
+
+#clfs = [SGDClassifier(tol = 1e-3, n_jobs = -1), MultinomialNB()]
+#params = [{'loss' : ('log', 'modified_huber'), 
+#           'penalty' : ('l1', 'l2', 'elasticnet'), 
+#           'alpha' : [1e-1, 1e-2, 1e-3, 1e-4]},
+#          {'alpha' : [0.25, 0.5, 0.75, 1.0]}]
+results = []
 for index, X_set, y_set in ezip(X_trains, y_trains):
+    temp_results = []
+    print(index + 1, " : ", words[index])
     vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
-    X_set_I = vectorizer.fit_transform(X_set[:100], y_set[:100])
+    X_set_I = vectorizer.fit_transform(X_set[:1000], y_set[:1000])
     X_test_set_I = vectorizer.transform(X_tests[index])
-    clf.fit(X_set_I, y_set[:100])
-    print(clf.predict_proba(X_test_set_I))
+    transformer_train = Normalizer().fit(X_set_I)
+    transformer_test = Normalizer().fit(X_test_set_I)
+    X_set_I = transformer_train.transform(X_set_I)
+    X_test_set_I = transformer_test.transform(X_test_set_I)
+    for clfindex, classifier in enumerate(clfs):
+        print(clf_names[clfindex], ": grid search.")
+        grid = GridSearchCV(classifier, params[clfindex], cv = 5, iid = False)
+        grid.fit(X_set_I, y_set[:1000])
+        print(clf_names[clfindex], ": bagging.")
+        best = BaggingClassifier(grid.best_estimator_, n_estimators = 100, max_samples = 0.5, max_features = 0.5)
+        best.fit(X_set_I, y_set[:1000])
+        temp_results.append(best.predict_proba(X_test_set_I))
+    results.append(array_average_in_place(temp_results))
+    #[results.append(k) for k in array_average_in_place(temp_results)]
+with open('output.csv', 'w+') as file:
+    file.write('Id,Expected')
+    for index, item in enumerate(results):
+        for entry in item:
+            file.write('\n')
+            file.write(','.join(map(str, entry)))
+    print(index)
 
 '''
-clf = BaggingClassifier(MLPClassifier(max_iter = 500), max_samples = 0.5, max_features = 0.5)
+#working below
+
+clf = BaggingClassifier(SGDClassifier(), n_estimators = 100, max_samples = 0.25, max_features = 0.25)
 for index, X_set, y_set in ezip(X_trains, y_trains):
     vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
     X_set_I = vectorizer.fit_transform(X_set, y_set)
     X_test_set_I = vectorizer.transform(X_tests[index])
     clf.fit(X_set_I, y_set)
     print(clf.predict_proba(X_test_set_I))
-'''
-
-'''
-for index, X_train_set, X_test_set in ezip(X_trains, X_tests):
-vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
-    X_train_tfidf = vectorizer.fit_transform(X_train_set, y_trains[index])
-    X_test_tfidf = vectorizer.transform(X_test_set)
-
-for index, X_train_tfidf, X_test_tfidf in ezip(X_trains, X_tests):
-    clf.fit(X_train_tfidf, y_trains[index])
-    results.append(clf.predict_proba(X_test_tfidf))
-    print(clf.classes_)
-    print(clf.predict_proba(X_test_tfidf)) 
-
-count = 1
-with open("results.csv", "w", encoding  = "utf-8") as file:
-    for table in results:
-        for value in table[:, 0]:
-            file.write(str(count))
-            file.write(',')
-            file.write(str(value))
-            file.write('\n')
-            count += 1
 '''
