@@ -8,6 +8,13 @@ from sklearn.feature_selection import RFECV
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import GridSearchCV
+import math
 import re
 
 def ezip(ls1, ls2):
@@ -20,9 +27,13 @@ def ezip(ls1, ls2):
 
 def readfile(file):
     input = []
+    count = 0
     with open(file, encoding = "utf-8 ") as f:
         for line in f:
                 input.append(line.strip())
+                count += 1
+                if count > 15000:
+                    pass
     return input
 
 print("Reading files.")
@@ -60,60 +71,37 @@ def format_trains(i):
         y_trains.append(y)
     return X_trains, y_trains
 
-def array_average_in_place(lst):
-    result = []
-    for row in range(len(lst[0])):
-        temp = []
-        sum = 0
-        for array in lst:
-            #sum += array.item(row, 0)
-            temp.append(array.item(row, 0))
-        result.append(temp)
-        #result.append(sum/len(lst))
-    print(len(result))
-    return result
+def crossentropy(i, j):
+    summation = 0
+    for x, y in zip(i[:,0], j):
+        summation += y * math.log(x) + (1-y)*math.log(1-x)
+    return -summation / len(i)
 
 X_trains, y_trains = format_trains(train_input)
-
 results = []
 count = 1
-scalar = StandardScaler(with_mean = False)
-clf1 = MultinomialNB()
-select1 = RFECV(clf1, cv = 5)
-bag = BaggingClassifier(clf1, n_estimators = 500, max_samples = 1.0, max_features = 1.0)
+
+clf = MultinomialNB()
+bag = BaggingClassifier(clf, n_estimators = 100)
+ce = 0
 for index, X_set, y_set in ezip(X_trains, y_trains):
     print(words[index])
     print('vectorizing')
+    X_set_train, X_set_val, y_set_train, y_set_val = train_test_split(X_set, y_set)
     vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (1,3), min_df = 0.05, max_df = 0.95)
-    X_set_I = vectorizer.fit_transform(X_set, y_set)
+    X_set_train_I = vectorizer.fit_transform(X_set_train, X_set_val)
+    X_set_val_I = vectorizer.transform(X_set_val)
     X_test_set_I = vectorizer.transform(X_tests[index])
-    #print('scaling')
-    #X_set_I = scalar.fit_transform(X_set_I)
-    #X_test_set_I = scalar.transform(X_test_set_I)
-    #print('fitting MultinomialNB')
-    #clf1.fit(X_set_I, y_set)
-    #print('filtering MultinomialNB')
-    #select1.fit(X_set_I, y_set)
-    bag.fit(X_set_I, y_set)
-    #print('fitting/voting')
-    #vote = VotingClassifier(estimators = [('bag', bag), ('ada', ada)], voting = 'soft')
-    #vote.fit(X_set_I, y_set)
-    #print(bag.predict_proba(X_test_set_I))
+    print('fitting')
+    bag.fit(X_set_train_I, y_set_train)
+    prediction = bag.predict_proba(X_set_val_I)
     results.append(bag.predict_proba(X_test_set_I))
+    y_wordmatrix = [1 if x == words[index][0] else 0 for x in y_set_val]
+    ce += crossentropy(prediction, y_wordmatrix)
+print(ce / 25)
 with open('output.csv', 'w', encoding = 'utf-8') as file:
     file.write('Id,Expected')
     for result in results:
         for line in result:
             file.write('\n{},{}'.format(count, line[0]))
             count += 1
-
-#working below
-'''
-clf = BaggingClassifier(SGDClassifier(), n_estimators = 100, max_samples = 0.25, max_features = 0.25)
-for index, X_set, y_set in ezip(X_trains, y_trains):
-    vectorizer = TfidfVectorizer(analyzer = 'word', stop_words = list(words[index]), ngram_range = (2,2))
-    X_set_I = vectorizer.fit_transform(X_set, y_set)
-    X_test_set_I = vectorizer.transform(X_tests[index])
-    clf.fit(X_set_I, y_set)
-    print(clf.predict_proba(X_test_set_I))
-'''
